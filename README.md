@@ -49,6 +49,8 @@ Releasing the keys will make it auto-correct to upright.
 
 It does not take fuel and does not take damage. It has no weapons. 
 
+It does not have storage (yet).
+
 You must be on the ground (or a roof) to shut down the engine and get out. 
 
 ## Saved position
