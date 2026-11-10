@@ -72,6 +72,53 @@ Delete `Content\Paks\LogicMods\SD_Heli.pak`, and optionally `SD_Heli_Save.sav` (
 - **The game crashes on start:** remove the `ue4ss` folder and `dwmapi.dll` to confirm whether UE4SS is the cause, then re-download the latest experimental build.
 - **It's stuck somewhere bad:** reset it by deleting the save file (see above).
 
+## Building from source
+
+This repo contains the Unreal Engine project for the mod: Blueprints, input assets, config, the build script and a debug script.
+
+**Requirements:** Unreal Engine **5.6** (it must match the game's engine version; paks cooked with another version won't load).
+
+### Assets not included
+
+These files are third-party content and are **not** in this repo. The project won't cook without them, so you must supply your own replacements at the same paths:
+
+| Path (under `Content/CustomMods/Vehicles/NewsHeli/`) | What it is |
+|---|---|
+| `Assets/HeliUndentedRigged` (+ `_Skeleton`, `_PhysicsAsset`) | Rigged helicopter skeletal mesh. It needs a main rotor bone named `b_MainRotor`. |
+| `Audio/helicopter-hovering-01`, `Audio/MS_HeliEngine` | Rotor/engine sound and the MetaSound that plays it |
+| `Materials/Mat_PolygonApocalypse_01_A`, `Textures/T_PolygonApocalypse_01_A` | Helicopter material and texture |
+
+If an asset's name or skeleton differs, re-point the references in `BP_Heli` and `ABP_Heli`.
+
+### Project layout
+
+| Path | Purpose |
+|---|---|
+| `Content/Mods/SD_Heli/ModActor` | Spawned by BPModLoaderMod on map load. Loads the saved position, spawns `BP_Heli` when the player is in range, and saves its position every 15 s |
+| `Content/Mods/SD_Heli/SG_HeliSave` | SaveGame class (`HeliTransform`, `bHasSaved`, `MapName`) |
+| `Content/CustomMods/Vehicles/NewsHeli/Blueprints/BP_Heli` | The helicopter (a Chaos `WheeledVehiclePawn` with thrusters) |
+| `Content/CustomMods/Vehicles/NewsHeli/Inputs/` | Enhanced Input actions and mapping contexts |
+| `BuildModPak.ps1` | Cooks, packs `SD_Heli.pak` and installs it into the game |
+| `Tools/ue4ss/SD_Heli/Scripts/main.lua` | Optional UE4SS dev helper: press F8 for player location and spawn diagnostics |
+
+### Build
+
+1. Open `SD_Helicopter.uproject` in UE 5.6, add the missing assets, then compile and **Save All**.
+2. Check the paths at the top of `BuildModPak.ps1` (engine install and game folder).
+3. Run:
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File .\BuildModPak.ps1
+   ```
+   Options: `-SkipCook` (repack without cooking) and `-NoInstall` (don't copy to the game).
+
+The pak must be named `SD_Heli.pak`, and the mod actor must live at `/Game/Mods/SD_Heli/ModActor`, or BPModLoaderMod won't find it.
+
+## License
+
+The code, Blueprints and other files in this repository are released under the [MIT License](LICENSE).
+
+Third-party content (the helicopter mesh, which comes from SurrounDead; the rotor sound; and the PolygonApocalypse material and texture) is **not** covered by this license and is not included in this repository. The release `.pak` contains cooked versions of these assets solely so the mod works in game.
+
 ## Disclaimer
 
 This is an unofficial fan mod. It is not affiliated with or endorsed by the developers of SurrounDead. Use it at your own risk, and back up your saves.
