@@ -19,10 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----------------------------------------------------------------------------
-Scope: this license covers only the files in this repository (Blueprints,
-input assets, scripts, configuration and documentation). It does NOT cover
-third-party content that is not included here, such as the helicopter mesh
-(from SurrounDead), the rotor sound, or the PolygonApocalypse material and
-texture. Those remain the property of their respective owners.
