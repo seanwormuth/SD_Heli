@@ -117,7 +117,7 @@ The pak must be named `SD_Heli.pak`, and the mod actor must live at `/Game/Mods/
 
 ## License
 
-The code, Blueprints and other files in this repository are released under the [MIT License](LICENSE).
+The code, Blueprints and other files in this repository are released under the "Unlicense" version of Github's licensing.
 
 Third-party content (the helicopter mesh, which comes from SurrounDead; the rotor sound; and the PolygonApocalypse material and texture) is **not** covered by this license and is not included in this repository. The release `.pak` contains cooked versions of these assets solely so the mod works in game.
 
