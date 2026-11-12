@@ -6,7 +6,8 @@ Adds a flyable helicopter to **SurrounDead**. The helicopter appears in the worl
 
 - A flyable helicopter that you can enter, fly, land and leave.
 - **It stays where you park it.** Its location is saved and restored when you restart the game.
-- Doesn't change any game files. Remove the mod at any time by deleting one file.
+- **Each save has its own helicopter.** Loading a different save brings back that save's helicopter, where you left it in that save.
+- Doesn't change any game files. Remove the mod at any time by deleting its files.
 
 ## Requirements
 
@@ -20,11 +21,17 @@ Adds a flyable helicopter to **SurrounDead**. The helicopter appears in the worl
 1. **Install UE4SS (experimental):** extract it into
    `...\steamapps\common\SurrounDead\SurrounDead\Binaries\Win64\`
    so that `dwmapi.dll` and the `ue4ss` folder sit next to the game exe (SurrounDead-Win64-Shipping.exe).
-2. **Download `SD_Heli.pak`** from the [Releases](../../releases) page.
-3. **Copy it to**
-   `...\steamapps\common\SurrounDead\SurrounDead\Content\Paks\LogicMods\`
-   (create the `LogicMods` folder if it doesn't exist).
+2. **Download `SD_Heli_v1.1.0.zip`** from the [Releases](../../releases) page.
+3. **Extract it into**
+   `...\steamapps\common\SurrounDead\SurrounDead\`
+   (the folder that contains `Binaries` and `Content`). It installs two things:
+   - `Content\Paks\LogicMods\SD_Heli.pak`: the helicopter itself
+   - `Binaries\Win64\ue4ss\Mods\SD_Heli\`: a small UE4SS script that gives each save its own helicopter. Its `enabled.txt` file turns it on.
 4. Start the game and load your save.
+
+> The pak works on its own, but without the script every save shares one helicopter (the v1.0.0 behavior).
+
+**Updating from v1.0.0:** extract the zip over your install and replace `SD_Heli.pak`. Your parked helicopter moves to the first save you load after updating. Your other saves start with the helicopter on the helipad.
 
 ## Finding the helicopter
 
@@ -55,24 +62,27 @@ You must be on the ground (or a roof) to shut down the engine and get out.
 
 ## Saved position
 
-The helicopter's position is stored in its own file. It's separate from the game's saves:
+Each game save gets its own helicopter file, next to the game's own save files:
 
 ```
-%LOCALAPPDATA%\SurrounDead\Saved\SaveGames\SD_Heli_Save.sav
+%LOCALAPPDATA%\SurrounDead\Saved\SaveGames\<SaveName>_SDHeli.sav
 ```
 
-- To **reset the helicopter** to its starting spot, close the game and delete that file.
-- This file is shared by all game saves. Loading an older save does not move the helicopter back.
+- The helicopter's position is saved while you're near it, so it's kept even if you quit without saving the game.
+- To **reset a save's helicopter** to the helipad, close the game and delete that save's `_SDHeli.sav` file.
+- A save with no `_SDHeli.sav` yet starts with the helicopter on the helipad.
+- Without the UE4SS script, the mod uses a single shared file, `SD_Heli_Save.sav`, as in v1.0.0.
 
 ## Uninstall
 
-Delete `Content\Paks\LogicMods\SD_Heli.pak`, and optionally `SD_Heli_Save.sav` (above).
+Delete `Content\Paks\LogicMods\SD_Heli.pak` and the `Binaries\Win64\ue4ss\Mods\SD_Heli` folder. Optionally delete the `*_SDHeli.sav` files (above).
 
 ## Troubleshooting
 
 - **The helicopter doesn't appear:** make sure UE4SS is the *experimental* build, and check `Binaries\Win64\ue4ss\UE4SS.log` for a line like `[BPModLoaderMod] Loading mod: SD_Heli`.
 - **The game crashes on start:** remove the `ue4ss` folder and `dwmapi.dll` to confirm whether UE4SS is the cause, then re-download the latest experimental build.
-- **It's stuck somewhere bad:** reset it by deleting the save file (see above).
+- **It's stuck somewhere bad:** reset it by deleting that save's `_SDHeli.sav` file (see above).
+- **Every save shares one helicopter:** the UE4SS script isn't running. Check that `ue4ss\Mods\SD_Heli\enabled.txt` exists and that `UE4SS.log` shows `[SD_Heli] per-save helicopters enabled`.
 
 ## Building from source
 
@@ -96,12 +106,13 @@ If an asset's name or skeleton differs, re-point the references in `BP_Heli` and
 
 | Path | Purpose |
 |---|---|
-| `Content/Mods/SD_Heli/ModActor` | Spawned by BPModLoaderMod on map load. Loads the saved position, spawns `BP_Heli` when the player is in range, and saves its position every 15 s |
+| `Content/Mods/SD_Heli/ModActor` | Spawned by BPModLoaderMod on map load. Loads the saved position for the current save (custom event `SDHeli_LoadForSave`), spawns `BP_Heli` when the player is in range, and saves its position only while the player is near it |
 | `Content/Mods/SD_Heli/SG_HeliSave` | SaveGame class (`HeliTransform`, `bHasSaved`, `MapName`) |
 | `Content/CustomMods/Vehicles/NewsHeli/Blueprints/BP_Heli` | The helicopter (a Chaos `WheeledVehiclePawn` with thrusters) |
 | `Content/CustomMods/Vehicles/NewsHeli/Inputs/` | Enhanced Input actions and mapping contexts |
 | `BuildModPak.ps1` | Cooks, packs `SD_Heli.pak` and installs it into the game |
-| `Tools/ue4ss/SD_Heli/Scripts/main.lua` | Optional UE4SS dev helper: press F8 for player location and spawn diagnostics |
+| `Tools/ue4ss/SD_Heli/Scripts/main.lua` | UE4SS companion script, shipped in the release zip. Reads the loaded save's name and tells ModActor which `<SaveName>_SDHeli` slot to use |
+| `Tools/ue4ss/SD_Heli/Scripts/dev_helper.lua` | Optional dev helper, not shipped: press F8 for player location and spawn diagnostics. `main.lua` loads it if it's present |
 
 ### Build
 

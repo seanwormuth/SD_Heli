@@ -1,97 +1,132 @@
--- SD_Heli dev helper
--- F8: print player location/rotation/map, plus diagnostics for ModActor and BP_Heli.
--- NOTE: only plain field reads on struct variables. Calling UFunctions or :ToString() on
--- struct (Transform) values crashes UE4SS natively (pcall can't catch it).
+-- SD_Heli companion script
+-- Gives every SurrounDead save its own helicopter and parked position.
+--
+-- SurrounDead loads ModActor once at startup, while the main menu is up, and loading a save
+-- doesn't reload the level. So ModActor can't pick the right helicopter in BeginPlay. Instead:
+--   1. BeginPlay calls the custom event SDHeli_RequestSaveName. This script answers by setting
+--      ModActor.LuaManaged = true, telling the Blueprint to wait instead of loading.
+--   2. When the player's character appears in a loaded save (PlayerController:ClientRestart),
+--      this script reads the save's name, sets ModActor.SaveSlotName to "<SaveName>_SDHeli"
+--      and calls ModActor's custom event SDHeli_LoadForSave.
+-- The helicopter file is SaveGames\<SaveName>_SDHeli.sav, next to the game's own
+-- <SaveName>_Quests.sav and <SaveName>_SkillTree.sav.
+-- Without this script LuaManaged stays false and ModActor uses the old shared "SD_Heli_Save".
 
-local function fmt3(x, y, z) return string.format("X=%.0f Y=%.0f Z=%.0f", x, y, z) end
+local LEGACY_SLOT = "SD_Heli_Save"
+local SUFFIX = "_SDHeli"
+local SAVE_DIR = (os.getenv("LOCALAPPDATA") or "") .. "\\SurrounDead\\Saved\\SaveGames\\"
+local SETTLE_MS = 1000 -- give the game a moment to finish loading the save
 
-local function d3(ax, ay, az, bx, by, bz)
-    local dx, dy, dz = ax - bx, ay - by, az - bz
-    return math.sqrt(dx * dx + dy * dy + dz * dz)
+local function log(msg) print("[SD_Heli] " .. msg .. "\n") end
+
+local function valid(o)
+    local ok, v = pcall(function() return o ~= nil and o:IsValid() end)
+    return ok and v
 end
 
-local function safe(label, fn)
-    local ok, err = pcall(fn)
-    if not ok then print(string.format("[SD_Heli]   %s failed: %s\n", label, tostring(err))) end
+local function to_str(v)
+    if type(v) == "string" then return v end
+    local ok, s = pcall(function() return v:ToString() end)
+    if ok and type(s) == "string" then return s end
+    return nil
 end
 
--- Read a Transform variable field by field. Yaw is derived from the rotation quaternion.
-local function showTransform(m, name, px, py, pz)
-    local ok, t = pcall(function() return m[name] end)
-    if not ok or t == nil then return end
-    safe(name, function()
-        -- Vector variable: read X/Y/Z directly (field read only; safe).
-        local okV, vx = pcall(function() return t.X end)
-        if okV and type(vx) == "number" then
-            local x, y, z = t.X, t.Y, t.Z
-            print(string.format("[SD_Heli]      %s (vector): %s | player distance=%.0f\n",
-                name, fmt3(x, y, z), d3(px, py, pz, x, y, z)))
-            return
+-- The game saves with Easy Multi Save; its EMSObject holds the name of the loaded save.
+local ems = nil
+local function current_save_name()
+    pcall(function()
+        if valid(ems) then return end
+        ems = nil
+        for _, o in ipairs(FindAllOf("EMSObject") or {}) do
+            if valid(o) and o:GetClass():GetFName():ToString() == "EMSObject" then ems = o end
         end
-        local tr, q, sc = t.Translation, t.Rotation, t.Scale3D
-        local x, y, z = tr.X, tr.Y, tr.Z
-        if type(x) ~= "number" then
-            print(string.format("[SD_Heli]      %s: unreadable from Lua (got %s) - check it in the editor\n", name, type(x)))
-            return
-        end
-        local yaw = math.deg(math.atan(2 * (q.W * q.Z + q.X * q.Y), 1 - 2 * (q.Y * q.Y + q.Z * q.Z)))
-        print(string.format("[SD_Heli]      %s: Loc %s | Yaw=%.0f | Scale %.2f,%.2f,%.2f | player distance=%.0f\n",
-            name, fmt3(x, y, z), yaw, sc.X, sc.Y, sc.Z, d3(px, py, pz, x, y, z)))
+    end)
+    if not ems then return nil end
+    local name
+    pcall(function() name = to_str(ems.CurrentSaveGameName) end)
+    -- slot names become file names: refuse anything with path characters
+    if not name or name == "" or name:find("[\\/:%*%?\"<>|]") or name:find("%.%.") then return nil end
+    return name
+end
+
+local function exists(path)
+    local f = io.open(path, "rb")
+    if f then f:close() return true end
+    return false
+end
+
+-- One-time move: the helicopter parked under the old shared save goes to the first save
+-- loaded after updating. The old file is renamed, not deleted.
+local function migrate_legacy(slot)
+    local old = SAVE_DIR .. LEGACY_SLOT .. ".sav"
+    local new = SAVE_DIR .. slot .. ".sav"
+    if not exists(old) or exists(new) then return end
+    local src = io.open(old, "rb"); if not src then return end
+    local data = src:read("a"); src:close()
+    local dst = io.open(new, "wb"); if not dst then return end
+    dst:write(data); dst:close()
+    os.rename(old, SAVE_DIR .. LEGACY_SLOT .. ".migrated")
+    log("moved the old shared helicopter save to " .. slot)
+end
+
+-- SurrounDead starts two ModActors. Only one of them gets to manage the helicopter.
+local owner = nil
+local function pick_owner()
+    if valid(owner) then return owner end
+    owner = nil
+    for _, m in ipairs(FindAllOf("ModActor_C") or {}) do
+        if valid(m) then owner = m break end
+    end
+    return owner
+end
+
+local in_game = false   -- a save has been loaded and the player is in it
+local last_slot = nil   -- slot ModActor was last told to load
+
+local function load_for_current_save(reason)
+    local actor = pick_owner()
+    if not actor then log("no ModActor yet (" .. reason .. ")") return end
+    local name = current_save_name()
+    if not name then
+        log("couldn't read the loaded save's name (" .. reason .. ") - helicopter not loaded")
+        return
+    end
+    local slot = name .. SUFFIX
+    if slot == last_slot then return end -- same save (e.g. respawn after death): keep the helicopter
+    pcall(migrate_legacy, slot)
+    local ok, err = pcall(function()
+        actor.SaveSlotName = slot
+        actor:SDHeli_LoadForSave()
+    end)
+    if ok then
+        last_slot = slot
+        log("loaded helicopter for save " .. name .. " (slot " .. slot .. ", " .. reason .. ")")
+    else
+        log("SDHeli_LoadForSave failed: " .. tostring(err))
+    end
+end
+
+local function schedule_load(reason)
+    ExecuteWithDelay(SETTLE_MS, function()
+        ExecuteInGameThread(function() load_for_current_save(reason) end)
     end)
 end
 
-RegisterKeyBind(Key.F8, function()
-    ExecuteInGameThread(function()
-        local pc = FindFirstOf("PlayerController")
-        if not pc or not pc:IsValid() then print("[SD_Heli] No PlayerController\n") return end
-        local pawn = pc.Pawn
-        if not pawn or not pawn:IsValid() then print("[SD_Heli] No pawn\n") return end
-        local loc = pawn:K2_GetActorLocation()
-        local rot = pawn:K2_GetActorRotation()
-        local px, py, pz = loc.X, loc.Y, loc.Z
-        local world = pawn:GetWorld()
-        local map = world and world:IsValid() and world:GetFullName() or "?"
-        print(string.format("[SD_Heli] Location %s | Yaw=%.0f | Map=%s\n", fmt3(px, py, pz), rot.Yaw, map))
-
-        local mods = FindAllOf("ModActor_C") or {}
-        print(string.format("[SD_Heli] ModActor instances: %d\n", #mods))
-        for i, m in ipairs(mods) do
-            print(string.format("[SD_Heli]   #%d %s\n", i, m:GetFullName()))
-            for _, name in ipairs({ "DefaultTransform", "SpawnTransform", "SpawnLocation" }) do
-                showTransform(m, name, px, py, pz)
-            end
-            safe("DebugStep", function()
-                local s = m.DebugStep
-                if type(s) == "number" then print(string.format("[SD_Heli]      DebugStep = %d\n", s)) end
-            end)
-            safe("SpawnRadius", function()
-                print(string.format("[SD_Heli]      SpawnRadius = %.0f\n", m.SpawnRadius))
-            end)
-            safe("SpawnedHeli", function()
-                local h = m.SpawnedHeli
-                print(string.format("[SD_Heli]      SpawnedHeli = %s\n", (h and h:IsValid()) and h:GetFullName() or "None"))
-            end)
-        end
-
-        local helis = FindAllOf("BP_Heli_C") or {}
-        print(string.format("[SD_Heli] BP_Heli instances: %d\n", #helis))
-        for i, h in ipairs(helis) do
-            safe("BP_Heli " .. i, function()
-                local hl = h:K2_GetActorLocation()
-                print(string.format("[SD_Heli]   #%d at %s | distance=%.0f\n", i, fmt3(hl.X, hl.Y, hl.Z),
-                    d3(px, py, pz, hl.X, hl.Y, hl.Z)))
-            end)
-        end
-
-        local sav = (os.getenv("LOCALAPPDATA") or "") .. "\\SurrounDead\\Saved\\SaveGames\\SD_Heli_Save.sav"
-        local f = io.open(sav, "rb")
-        if f then
-            local size = f:seek("end"); f:close()
-            print(string.format("[SD_Heli] Save file exists (%d bytes)\n", size))
-        else
-            print("[SD_Heli] Save file NOT found (normal until the heli has spawned once)\n")
-        end
-    end)
+-- ModActor's BeginPlay asks whether this script is here.
+RegisterCustomEvent("SDHeli_RequestSaveName", function(ctx)
+    local actor = ctx:get()
+    pcall(function() actor.LuaManaged = true end)
+    -- If a ModActor shows up while already in a save, load for it right away.
+    if in_game then schedule_load("ModActor started in game") end
 end)
 
-print("[SD_Heli] Loaded - press F8 for location + spawn diagnostics\n")
+-- Fires when the player's character is spawned into a loaded save.
+RegisterHook("/Script/Engine.PlayerController:ClientRestart", function() end, function()
+    in_game = true
+    schedule_load("player spawned")
+end)
+
+log("per-save helicopters enabled")
+
+-- Optional dev helper (F8 diagnostics), only if dev_helper.lua sits next to this file.
+pcall(require, "dev_helper")
