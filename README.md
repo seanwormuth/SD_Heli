@@ -21,7 +21,7 @@ Adds a flyable helicopter to **SurrounDead**. The helicopter appears in the worl
 1. **Install UE4SS (experimental):** extract it into
    `...\steamapps\common\SurrounDead\SurrounDead\Binaries\Win64\`
    so that `dwmapi.dll` and the `ue4ss` folder sit next to the game exe (SurrounDead-Win64-Shipping.exe).
-2. **Download `SD_Heli_v1.1.0.zip`** from the [Releases](../../releases) page.
+2. **Download `SD_Heli_v1.1.1.zip`** from the [Releases](../../releases) page.
    > ⚠️ Don't use the green **Code → Download ZIP** button. It downloads the source project (`SD_Heli-main.zip`), not the mod.
 3. **Extract it into**
    `...\steamapps\common\SurrounDead\SurrounDead\`
@@ -31,6 +31,8 @@ Adds a flyable helicopter to **SurrounDead**. The helicopter appears in the worl
 4. Start the game and load your save.
 
 > The pak works on its own, but without the script every save shares one helicopter (the v1.0.0 behavior).
+
+**Updating from v1.1.0:** extract the zip over your install and replace the files. Your helicopters stay where you parked them.
 
 **Updating from v1.0.0:** extract the zip over your install and replace `SD_Heli.pak`. Your parked helicopter moves to the first save you load after updating. Your other saves start with the helicopter on the helipad.
 
