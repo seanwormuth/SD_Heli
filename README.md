@@ -1,6 +1,6 @@
 # SD_Heli — Flyable Helicopter for SurrounDead
 
-Adds a flyable helicopter to **SurrounDead**. The helicopter appears in the world, you can climb in and fly it anywhere, and it stays where you parked it between play sessions. It is not made for multiplayer and has not been tested there. Not compatible with SurrounSync co-op: the helicopter only exists for you. The same helicopter is shared across all game saves. I am working on making each game save have it's own helicopter so they can be parked in different locations in different games. 
+Adds a flyable helicopter to **SurrounDead**. The helicopter appears in the world, you can climb in and fly it anywhere, and it stays where you parked it between play sessions. It is not made for multiplayer and has not been tested there. Not compatible with SurrounSync co-op: the helicopter only exists for you. Each game save has its own helicopter, so it can be parked in a different place in each game.
 
 ## Features
 
