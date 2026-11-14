@@ -86,13 +86,20 @@ local last_slot = nil   -- slot ModActor was last told to load
 local function load_for_current_save(reason)
     local actor = pick_owner()
     if not actor then log("no ModActor yet (" .. reason .. ")") return end
+    -- only in a real game, never at the main menu
+    if not valid(FindFirstOf("BP_PlayerCharacter_C")) then log("no player character yet (" .. reason .. ")") return end
     local name = current_save_name()
     if not name then
         log("couldn't read the loaded save's name (" .. reason .. ") - helicopter not loaded")
         return
     end
     local slot = name .. SUFFIX
-    if slot == last_slot then return end -- same save (e.g. respawn after death): keep the helicopter
+    -- same save and the helicopter is still there (e.g. respawn after death): keep it
+    if slot == last_slot then
+        for _, h in ipairs(FindAllOf("BP_Heli_C") or {}) do
+            if valid(h) then return end
+        end
+    end
     pcall(migrate_legacy, slot)
     local ok, err = pcall(function()
         actor.SaveSlotName = slot
@@ -127,6 +134,37 @@ RegisterHook("/Script/Engine.PlayerController:ClientRestart", function() end, fu
 end)
 
 log("per-save helicopters enabled")
+
+-- Helicopter storage (storage.lua). Active once a save has been loaded for the helicopter.
+local ok_storage, storage = pcall(require, "storage")
+
+-- Parking (parking.lua): a parked helicopter doesn't simulate physics, so it can't drop through
+-- the map while the game reloads a save or terrain streams in.
+local ok_parking, parking = pcall(require, "parking")
+if ok_parking and type(parking) == "table" then
+    parking.init()
+else
+    log("parking.lua not loaded: " .. tostring(parking))
+end
+
+-- A new map means a new world: nothing from the old one carries over. Forget the save so loading
+-- one again (even the same one) loads its helicopter again. (Loading a save from the main menu
+-- doesn't load a new map in SurrounDead: parking.lua and storage.lua handle that case.)
+RegisterLoadMapPostHook(function()
+    in_game, last_slot, owner, ems = false, nil, nil, nil
+    if ok_storage and type(storage) == "table" then pcall(storage.reset) end
+    if ok_parking and type(parking) == "table" then pcall(parking.reset) end
+    log("map loaded: waiting for a save")
+end)
+
+if ok_storage and type(storage) == "table" then
+    storage.init(function()
+        if not last_slot then return nil end
+        return (last_slot:gsub(SUFFIX .. "$", ""))
+    end)
+else
+    log("storage.lua not loaded: " .. tostring(storage))
+end
 
 -- Optional dev helper (F8 diagnostics), only if dev_helper.lua sits next to this file.
 pcall(require, "dev_helper")

@@ -7,6 +7,8 @@ Adds a flyable helicopter to **SurrounDead**. The helicopter appears in the worl
 - A flyable helicopter that you can enter, fly, land and leave.
 - **It stays where you park it.** Its location is saved and restored when you restart the game.
 - **Each save has its own helicopter.** Loading a different save brings back that save's helicopter, where you left it in that save.
+- **Storage.** Look at the cabin and the game's prompt offers **Enter Helicopter** and **Open Storage**, like the game's own vehicles. Each save's helicopter has its own storage, saved with the game save.
+- **A parked helicopter stays put.** Once you get out and it comes to rest, it's held in place, so it can't drop through the map when you reload a save or when terrain loads in.
 - Doesn't change any game files. Remove the mod at any time by deleting its files.
 
 ## Requirements
@@ -21,16 +23,18 @@ Adds a flyable helicopter to **SurrounDead**. The helicopter appears in the worl
 1. **Install UE4SS (experimental):** extract it into
    `...\steamapps\common\SurrounDead\SurrounDead\Binaries\Win64\`
    so that `dwmapi.dll` and the `ue4ss` folder sit next to the game exe (SurrounDead-Win64-Shipping.exe).
-2. **Download `SD_Heli_v1.1.1.zip`** from the [Releases](../../releases) page.
+2. **Download `SD_Heli_v1.2.0.zip`** from the [Releases](../../releases) page.
    > ⚠️ Don't use the green **Code → Download ZIP** button. It downloads the source project (`SD_Heli-main.zip`), not the mod.
 3. **Extract it into**
    `...\steamapps\common\SurrounDead\SurrounDead\`
    (the folder that contains `Binaries` and `Content`). It installs two things:
    - `Content\Paks\LogicMods\SD_Heli.pak`: the helicopter itself
-   - `Binaries\Win64\ue4ss\Mods\SD_Heli\`: a small UE4SS script that gives each save its own helicopter. Its `enabled.txt` file turns it on.
+   - `Binaries\Win64\ue4ss\Mods\SD_Heli\`: small UE4SS scripts (`main.lua`, `storage.lua`, `parking.lua`) that give each save its own helicopter, add the storage and keep a parked helicopter in place. Its `enabled.txt` file turns them on.
 4. Start the game and load your save.
 
-> The pak works on its own, but without the script every save shares one helicopter (the v1.0.0 behavior).
+> The pak works on its own, but without the scripts every save shares one helicopter (the v1.0.0 behavior) and there's no storage.
+
+**Updating from v1.1.x:** extract the zip over your install and replace the files. Your helicopters stay where you parked them. Each save's storage is created the first time you load it.
 
 **Updating from v1.1.0:** extract the zip over your install and replace the files. Your helicopters stay where you parked them.
 
@@ -49,6 +53,7 @@ To fly it you approach it, press "F" to enter and then "Left shift" to start the
 | Action | Key |
 |---|---|
 | Enter / exit helicopter | **F** |
+| Enter helicopter / open storage | look at the cabin: the game's prompt shows both options |
 | Climb / descend | **Left Shift** / **Left Ctrl** |
 | Forward / back | **W** / **S** |
 | Left / right | **A** / **D** |
@@ -59,7 +64,13 @@ Releasing the keys will make it auto-correct to upright.
 
 It does not take fuel and does not take damage. It has no weapons. 
 
-It does not have storage (yet).
+## Storage
+
+Look at the helicopter's cabin from outside and the game's interact prompt offers **Enter Helicopter** and **Open Storage**. Storage opens the same window as the utility truck's.
+
+- Each save's helicopter has its own storage. It's an invisible storage crate attached to the cabin, so **its contents are saved with the game save**: save the game to keep them, like any other storage.
+- The crate is created the first time you load a save with the helicopter. `<SaveName>_SDHeli_Storage.txt` (next to the helicopter file below) helps the script find it again.
+- The storage moves with the helicopter.
 
 You must be on the ground (or a roof) to shut down the engine and get out. 
 
@@ -72,19 +83,23 @@ Each game save gets its own helicopter file, next to the game's own save files:
 ```
 
 - The helicopter's position is saved while you're near it, so it's kept even if you quit without saving the game.
-- To **reset a save's helicopter** to the helipad, close the game and delete that save's `_SDHeli.sav` file.
+- To **reset a save's helicopter** to the helipad, close the game and delete that save's `_SDHeli.sav` file. Its storage stays in the game save and attaches to the helicopter again on the helipad.
 - A save with no `_SDHeli.sav` yet starts with the helicopter on the helipad.
 - Without the UE4SS script, the mod uses a single shared file, `SD_Heli_Save.sav`, as in v1.0.0.
 
 ## Uninstall
 
-Delete `Content\Paks\LogicMods\SD_Heli.pak` and the `Binaries\Win64\ue4ss\Mods\SD_Heli` folder. Optionally delete the `*_SDHeli.sav` files (above).
+Delete `Content\Paks\LogicMods\SD_Heli.pak` and the `Binaries\Win64\ue4ss\Mods\SD_Heli` folder. Optionally delete the `*_SDHeli.sav` and `*_SDHeli_Storage.txt` files (above).
+
+> **Empty the helicopter's storage first.** The storage crate is part of your game save. Without the mod it shows up as a large, stretched storage crate where the helicopter was parked. Your items are still in it, and you can empty or dismantle it like any crate.
 
 ## Troubleshooting
 
 - **The helicopter doesn't appear:** make sure UE4SS is the *experimental* build, and check `Binaries\Win64\ue4ss\UE4SS.log` for a line like `[BPModLoaderMod] Loading mod: SD_Heli`.
 - **The game crashes on start:** remove the `ue4ss` folder and `dwmapi.dll` to confirm whether UE4SS is the cause, then re-download the latest experimental build.
-- **It's stuck somewhere bad:** reset it by deleting that save's `_SDHeli.sav` file (see above).
+- **It's stuck somewhere bad, or it fell under the map:** reset it by deleting that save's `_SDHeli.sav` file (see above).
+- **No "Open Storage" prompt:** check that `UE4SS.log` shows `[SD_Heli] storage: helicopter storage ready for <your save>`. The storage needs the scripts from the zip, not just the pak.
+- **A large crate appears in the world:** that's a helicopter storage crate without the scripts running (for example after uninstalling). Install the scripts again, or empty and dismantle it.
 - **Every save shares one helicopter:** the UE4SS script isn't running. Check that `ue4ss\Mods\SD_Heli\enabled.txt` exists and that `UE4SS.log` shows `[SD_Heli] per-save helicopters enabled`.
 
 ## Building from source
@@ -114,8 +129,10 @@ If an asset's name or skeleton differs, re-point the references in `BP_Heli` and
 | `Content/CustomMods/Vehicles/NewsHeli/Blueprints/BP_Heli` | The helicopter (a Chaos `WheeledVehiclePawn` with thrusters) |
 | `Content/CustomMods/Vehicles/NewsHeli/Inputs/` | Enhanced Input actions and mapping contexts |
 | `BuildModPak.ps1` | Cooks, packs `SD_Heli.pak` and installs it into the game |
-| `Tools/ue4ss/SD_Heli/Scripts/main.lua` | UE4SS companion script, shipped in the release zip. Reads the loaded save's name and tells ModActor which `<SaveName>_SDHeli` slot to use |
-| `Tools/ue4ss/SD_Heli/Scripts/dev_helper.lua` | Optional dev helper, not shipped: press F8 for player location and spawn diagnostics. `main.lua` loads it if it's present |
+| `Tools/ue4ss/SD_Heli/Scripts/main.lua` | UE4SS companion script, shipped in the release zip. Reads the loaded save's name, tells ModActor which `<SaveName>_SDHeli` slot to use, and loads the two scripts below |
+| `Tools/ue4ss/SD_Heli/Scripts/storage.lua` | Shipped. The storage: an invisible `Buildable_StorageCrate` stretched over the cabin and attached to the helicopter, with the truck's storage window and an "Enter Helicopter / Open Storage" prompt. Also stops `BP_HeliEntry`'s range sphere from blocking traces |
+| `Tools/ue4ss/SD_Heli/Scripts/parking.lua` | Shipped. Switches off a parked helicopter's physics (SurrounDead reloads a save without loading a new map, so a simulating helicopter can drop through the rebuilt ground) and removes a helicopter left over from a previously loaded save |
+| `Tools/ue4ss/SD_Heli/Scripts/dev_helper.lua` | Optional dev helper, not shipped: F8 player location and spawn diagnostics, F7/F6 place and show the storage box, F2 collision dump. `main.lua` loads it if it's present |
 
 ### Build
 

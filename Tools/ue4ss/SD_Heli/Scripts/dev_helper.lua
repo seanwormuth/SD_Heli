@@ -116,4 +116,170 @@ RegisterKeyBind(Key.F8, function()
     end)
 end)
 
-print("[SD_Heli] Dev helper loaded - press F8 for location + spawn diagnostics\n")
+-- Storage placement (see storage.lua).
+-- F7: move the invisible cabin box (storage + prompt) to the player's fore/aft position and
+--     height, centred across the helicopter, and print the value to put in storage.lua
+-- F6: show/hide the cabin box
+local storage_visible = false
+local function storage_mod()
+    local s = package.loaded["storage"]
+    if type(s) == "table" then return s end
+    print("[SD_Heli] storage.lua isn't loaded\n")
+    return nil
+end
+
+RegisterKeyBind(Key.F7, function()
+    ExecuteInGameThread(function()
+        local s = storage_mod(); if not s then return end
+        local heli = FindFirstOf("BP_Heli_C")
+        local pc = FindFirstOf("PlayerController")
+        local pawn = pc and pc.Pawn
+        if not heli or not heli:IsValid() or not pawn or not pawn:IsValid() then
+            print("[SD_Heli] F7: need the helicopter and the player\n") return
+        end
+        local p, h = pawn:K2_GetActorLocation(), heli:K2_GetActorLocation()
+        local d = { X = p.X - h.X, Y = p.Y - h.Y, Z = p.Z - h.Z }
+        local fw, rt, up = heli:GetActorForwardVector(), heli:GetActorRightVector(), heli:GetActorUpVector()
+        local off = {
+            X = math.floor(d.X * fw.X + d.Y * fw.Y + d.Z * fw.Z + 0.5),
+            Y = math.floor(d.X * rt.X + d.Y * rt.Y + d.Z * rt.Z + 0.5),
+            Z = math.floor(d.X * up.X + d.Y * up.Y + d.Z * up.Z + 0.5),
+        }
+        -- the player stands outside: keep their fore/aft position and height, centred across
+        off.Y = 0
+        s.move_to(off, heli)
+        print(string.format("[SD_Heli] F7: cabin box moved. Put this in storage.lua: M.CENTER = { X = %d, Y = %d, Z = %d }\n",
+            off.X, off.Y, off.Z))
+    end)
+end)
+
+RegisterKeyBind(Key.F6, function()
+    ExecuteInGameThread(function()
+        local s = storage_mod(); if not s then return end
+        storage_visible = not storage_visible
+        s.set_visible(storage_visible)
+        print("[SD_Heli] F6: storage crate " .. (storage_visible and "visible" or "hidden") .. "\n")
+    end)
+end)
+
+-- F2: collision responses of the cabin box, every part of the helicopter and the nearest game
+-- vehicle, per channel (0-31), to find the channel the game's interact trace uses.
+-- Response letters: I ignore, O overlap, B block. Channels 14-31 are the game's custom ones.
+local function responses(comp)
+    local out = {}
+    for ch = 0, 31 do
+        local ok, r = pcall(function() return comp:GetCollisionResponseToChannel(ch) end)
+        out[#out + 1] = (not ok or r == nil) and "?" or ({ [0] = "I", [1] = "O", [2] = "B" })[r] or tostring(r)
+    end
+    return table.concat(out)
+end
+
+local function dump_actor(label, actor)
+    if not actor or not actor:IsValid() then print("[SD_Heli] F2: " .. label .. ": none\n") return end
+    print("[SD_Heli] F2: " .. label .. ": " .. actor:GetFullName() .. "\n")
+    local cls = StaticFindObject("/Script/Engine.PrimitiveComponent")
+    local ok, err = pcall(function()
+        local comps = actor:K2_GetComponentsByClass(cls)
+        -- UE4SS hands the array back either as a TArray or as a plain Lua table
+        local list = {}
+        if type(comps) == "table" then
+            for _, e in ipairs(comps) do list[#list + 1] = e end
+        else
+            comps:ForEach(function(_, e) list[#list + 1] = e:get() end)
+        end
+        if #list == 0 then print("[SD_Heli]   no primitive components found\n") end
+        for _, c in ipairs(list) do
+            -- entries can come wrapped: unwrap with :get() when IsValid isn't callable directly
+            local okc, isv = pcall(function() return c:IsValid() end)
+            if not okc then
+                local okg, inner = pcall(function() return c:get() end)
+                if okg and inner then
+                    c = inner
+                    okc, isv = pcall(function() return c:IsValid() end)
+                end
+            end
+            if okc and isv then
+                local name, enabled, profile = "?", "?", "?"
+                pcall(function() name = c:GetFName():ToString() end)
+                pcall(function() enabled = tostring(c:GetCollisionEnabled()) end)
+                pcall(function() profile = c:GetCollisionProfileName():ToString() end)
+                print(string.format("[SD_Heli]   %-28s enabled=%s profile=%-20s %s\n", name, enabled, profile, responses(c)))
+            else
+                print(string.format("[SD_Heli]   (unreadable component: %s, %s)\n", type(c), tostring(isv)))
+            end
+        end
+    end)
+    if not ok then print("[SD_Heli]   components unreadable: " .. tostring(err) .. "\n") end
+end
+
+RegisterKeyBind(Key.F2, function()
+    ExecuteInGameThread(function()
+        -- the game's named custom channels (Project Settings > Collision), read from the engine
+        local okp, perr = pcall(function()
+            local cp = StaticFindObject("/Script/Engine.Default__CollisionProfile")
+            if not cp or not cp:IsValid() then error("CollisionProfile not found") end
+            local n = 0
+            cp.DefaultChannelResponses:ForEach(function(_, e)
+                local s = e:get()
+                local ch, name, trace, resp = "?", "?", "?", "?"
+                pcall(function() ch = tostring(s.Channel) end)
+                pcall(function() name = s.Name:ToString() end)
+                pcall(function() trace = tostring(s.bTraceType) end)
+                pcall(function() resp = tostring(s.DefaultResponse) end)
+                print(string.format("[SD_Heli] F2: channel %s = \"%s\" (trace=%s, default response=%s)\n", ch, name, trace, resp))
+                n = n + 1
+            end)
+            if n == 0 then print("[SD_Heli] F2: no custom channels listed\n") end
+        end)
+        if not okp then print("[SD_Heli] F2: channel names unreadable: " .. tostring(perr) .. "\n") end
+        print("[SD_Heli] F2: responses for channels 0-31 in order (I ignore, O overlap, B block)\n")
+        local heli = FindFirstOf("BP_Heli_C")
+        local s = package.loaded["storage"]
+        local box = type(s) == "table" and s.crate() or nil
+        -- after a UE4SS reload storage.lua may not have found the crate yet: take the one at the heli
+        if (not box) and heli and heli:IsValid() then
+            local h = heli:K2_GetActorLocation()
+            local bestD = 600
+            for _, c in ipairs(FindAllOf("Buildable_StorageCrate_C") or {}) do
+                if c:IsValid() then
+                    local l = c:K2_GetActorLocation()
+                    local d = d3(h.X, h.Y, h.Z, l.X, l.Y, l.Z)
+                    if d < bestD then box, bestD = c, d end
+                end
+            end
+        end
+        dump_actor("cabin box", box)
+        dump_actor("helicopter", heli)
+        -- every actor attached to the helicopter (entry trigger, doors, seats...): they sit at the
+        -- cabin and can block the interact trace there
+        if heli and heli:IsValid() then
+            local n = 0
+            for _, a in ipairs(FindAllOf("Actor") or {}) do
+                local okp, parent = pcall(function() return a:GetAttachParentActor() end)
+                if okp and parent and parent:IsValid() and parent:GetAddress() == heli:GetAddress()
+                    and not (box and a:GetAddress() == box:GetAddress()) then
+                    n = n + 1
+                    dump_actor("attached to the heli", a)
+                end
+            end
+            print(string.format("[SD_Heli] F2: %d other actor(s) attached to the heli\n", n))
+        end
+        -- nearest game vehicle
+        local pc = FindFirstOf("PlayerController")
+        local pawn = pc and pc:IsValid() and pc.Pawn
+        local best, bestD = nil, math.huge
+        if pawn and pawn:IsValid() then
+            local p = pawn:K2_GetActorLocation()
+            for _, v in ipairs(FindAllOf("BP_VehicleMaster_C") or {}) do
+                if v:IsValid() then
+                    local l = v:K2_GetActorLocation()
+                    local d = d3(p.X, p.Y, p.Z, l.X, l.Y, l.Z)
+                    if d < bestD then best, bestD = v, d end
+                end
+            end
+        end
+        dump_actor("nearest vehicle", best)
+    end)
+end)
+
+print("[SD_Heli] Dev helper loaded - F8 diagnostics, F7 move box, F6 show/hide box, F2 collision dump\n")
