@@ -182,13 +182,12 @@ function M.reset()
 end
 
 function M.init()
-    LoopAsync(M.CHECK_MS, function()
-        ExecuteInGameThread(function()
-            if not hooked then pcall(install_hooks) end
-            local ok, err = pcall(tick)
-            if not ok then report("tick:" .. tostring(err), "error: " .. tostring(err)) end
-        end)
-        return false
+    -- runs on the game thread: LoopAsync + ExecuteInGameThread touches the Lua state from two
+    -- threads, which corrupted it and crashed the game in UE4SS 3.0.1
+    LoopInGameThreadWithDelay(M.CHECK_MS, function()
+        if not hooked then pcall(install_hooks) end
+        local ok, err = pcall(tick)
+        if not ok then report("tick:" .. tostring(err), "error: " .. tostring(err)) end
     end)
     log("enabled")
 end

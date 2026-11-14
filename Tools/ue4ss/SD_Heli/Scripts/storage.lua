@@ -413,8 +413,8 @@ local function install_hooks()
         local now = os.clock()
         if now - entering < 1 then return end
         entering = now
-        ExecuteWithDelay(50, function()
-            ExecuteInGameThread(function()
+        ExecuteInGameThreadWithDelay(50, function()
+            do
                 local heli = first_heli()
                 local pc = player()
                 if heli and pc then
@@ -422,7 +422,7 @@ local function install_hooks()
                     local ok, err = pcall(function() heli:EnterHeli(pc) end)
                     if not ok then log("EnterHeli failed: " .. tostring(err)) end
                 end
-            end)
+            end
         end)
     end)
 
@@ -496,26 +496,22 @@ end
 
 function M.init(save_name_fn)
     get_save_name = save_name_fn
-    LoopAsync(M.CHECK_MS, function()
-        ExecuteInGameThread(function()
-            if not hooked then pcall(install_hooks) end -- also covers a UE4SS hot reload (Ctrl+R)
-            safe_ensure()
-        end)
-        return false -- keep looping
+    -- game-thread loops: LoopAsync + ExecuteInGameThread touches the Lua state from two threads,
+    -- which corrupted it and crashed the game in UE4SS 3.0.1
+    LoopInGameThreadWithDelay(M.CHECK_MS, function()
+        if not hooked then pcall(install_hooks) end -- also covers a UE4SS hot reload (Ctrl+R)
+        safe_ensure()
     end)
-    LoopAsync(200, function()
-        ExecuteInGameThread(function()
-            local ok, err = pcall(gate_entry)
-            if not ok then log("entry gate error: " .. tostring(err)) end
-        end)
-        return false
+    LoopInGameThreadWithDelay(200, function()
+        local ok, err = pcall(gate_entry)
+        if not ok then log("entry gate error: " .. tostring(err)) end
     end)
     -- the helicopter is about to exist: make the save's crate harmless right away
     pcall(NotifyOnNewObject, HELI_CLASS, function()
         ExecuteInGameThread(safe_ensure)
     end)
     RegisterHook("/Script/Engine.PlayerController:ClientRestart", function() end, function()
-        ExecuteWithDelay(3000, function() ExecuteInGameThread(install_hooks) end)
+        ExecuteInGameThreadWithDelay(3000, install_hooks)
     end)
     log("enabled")
 end

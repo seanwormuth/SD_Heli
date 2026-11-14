@@ -114,9 +114,7 @@ local function load_for_current_save(reason)
 end
 
 local function schedule_load(reason)
-    ExecuteWithDelay(SETTLE_MS, function()
-        ExecuteInGameThread(function() load_for_current_save(reason) end)
-    end)
+    ExecuteInGameThreadWithDelay(SETTLE_MS, function() load_for_current_save(reason) end)
 end
 
 -- ModActor's BeginPlay asks whether this script is here.

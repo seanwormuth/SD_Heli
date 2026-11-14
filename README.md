@@ -23,7 +23,7 @@ Adds a flyable helicopter to **SurrounDead**. The helicopter appears in the worl
 1. **Install UE4SS (experimental):** extract it into
    `...\steamapps\common\SurrounDead\SurrounDead\Binaries\Win64\`
    so that `dwmapi.dll` and the `ue4ss` folder sit next to the game exe (SurrounDead-Win64-Shipping.exe).
-2. **Download `SD_Heli_v1.2.0.zip`** from the [Releases](../../releases) page.
+2. **Download `SD_Heli_v1.2.1.zip`** from the [Releases](../../releases) page.
    > ⚠️ Don't use the green **Code → Download ZIP** button. It downloads the source project (`SD_Heli-main.zip`), not the mod.
 3. **Extract it into**
    `...\steamapps\common\SurrounDead\SurrounDead\`
